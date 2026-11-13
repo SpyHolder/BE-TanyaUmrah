@@ -1,0 +1,123 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Kelola Dokumen — tanyaUMRAH{% endblock %}
+{% block header_title %}Dokumen Knowledge Base{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+    <!-- Upload Section -->
+    <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+        <h3 class="text-base font-bold text-gray-800 mb-4 flex items-center space-x-2">
+            <i data-lucide="upload-cloud" class="w-5 h-5 text-primary"></i>
+            <span>Upload Dokumen PDF Baru</span>
+        </h3>
+
+        <form action="/admin/documents/upload" method="post" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="md:col-span-2">
+                <label class="block text-xs font-semibold text-gray-600 mb-1">File Dokumen PDF</label>
+                <input type="file" name="file" accept=".pdf" required class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer border border-gray-200 rounded-lg p-1.5">
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Kategori</label>
+                <select name="kategori" class="w-full text-sm border border-gray-200 rounded-lg p-2.5 focus:ring-primary focus:border-primary">
+                    <option value="akademik">Peraturan Akademik</option>
+                    <option value="kemahasiswaan">Kemahasiswaan</option>
+                    <option value="sop">SOP Layanan</option>
+                    <option value="etika">Etika & Tata Tertib</option>
+                    <option value="umum">Umum</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Tahun Terbit</label>
+                <input type="number" name="tahun" value="2026" class="w-full text-sm border border-gray-200 rounded-lg p-2 focus:ring-primary focus:border-primary">
+            </div>
+
+            <div class="md:col-span-4 flex justify-between items-center pt-2">
+                <span class="text-xs text-gray-500">
+                    💡 <em>Sistem otomatis mendeteksi apakah PDF berupa teks digital atau hasil scan (OCR otomatis).</em>
+                </span>
+                <button type="submit" class="bg-primary hover:bg-secondary text-white font-semibold text-sm px-6 py-2.5 rounded-lg transition shadow flex items-center space-x-2">
+                    <i data-lucide="play" class="w-4 h-4"></i>
+                    <span>Upload & Mulai Ingestion</span>
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Preloaded Data Ingestion Button -->
+    <div class="bg-blue-50 border border-blue-200 p-4 rounded-xl flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <i data-lucide="folder-archive" class="w-6 h-6 text-primary"></i>
+            <div>
+                <h4 class="text-sm font-bold text-gray-900">Ingest Dokumen Bawaan Kampus</h4>
+                <p class="text-xs text-gray-600">Jalankan proses ingestion untuk 5 dokumen PDF resmi yang ada di folder data kuliah.</p>
+            </div>
+        </div>
+        <form action="/admin/documents/sync-data-folder" method="post">
+            <button type="submit" class="bg-primary text-white hover:bg-secondary text-xs font-semibold px-4 py-2 rounded-lg transition flex items-center space-x-1.5 shadow-sm">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                <span>Sinkronkan Folder Data</span>
+            </button>
+        </form>
+    </div>
+
+    <!-- Documents List -->
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+            <h4 class="font-bold text-gray-800">Daftar Dokumen Knowledge Base ({{ documents|length }})</h4>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm text-gray-600">
+                <thead class="bg-gray-50 text-xs uppercase font-semibold text-gray-500">
+                    <tr>
+                        <th class="px-6 py-3">Nama Dokumen</th>
+                        <th class="px-6 py-3">Kategori</th>
+                        <th class="px-6 py-3">Tahun</th>
+                        <th class="px-6 py-3">Halaman</th>
+                        <th class="px-6 py-3">Chunk Vektor</th>
+                        <th class="px-6 py-3">Tipe</th>
+                        <th class="px-6 py-3">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for doc in documents %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 font-medium text-gray-900">{{ doc.nama }}</td>
+                        <td class="px-6 py-4 capitalize">{{ doc.kategori }}</td>
+                        <td class="px-6 py-4">{{ doc.tahun or '-' }}</td>
+                        <td class="px-6 py-4">{{ doc.jumlah_halaman }} hal</td>
+                        <td class="px-6 py-4 font-semibold text-primary">{{ doc.jumlah_chunk }}</td>
+                        <td class="px-6 py-4">
+                            {% if doc.tipe_pdf == 'scan' %}
+                            <span class="px-2 py-0.5 bg-amber-100 text-amber-800 text-xs rounded-full font-medium">Scan (OCR)</span>
+                            {% else %}
+                            <span class="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full font-medium">Digital</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 flex items-center space-x-2">
+                            <a href="/api/v1/documents/{{ doc.id }}/file" target="_blank" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1.5 rounded font-medium transition">
+                                Lihat PDF
+                            </a>
+                            <form action="/admin/documents/{{ doc.id }}/delete" method="post" onsubmit="return confirm('Hapus dokumen ini dan seluruh chunk-nya dari ChromaDB?');">
+                                <button type="submit" class="text-xs bg-red-50 hover:bg-red-100 text-red-600 px-2.5 py-1.5 rounded font-medium transition">
+                                    Hapus
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="px-6 py-8 text-center text-gray-400">
+                            Belum ada dokumen yang diunggah.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

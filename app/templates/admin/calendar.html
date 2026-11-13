@@ -1,0 +1,103 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Kalender Akademik — tanyaUMRAH{% endblock %}
+{% block header_title %}Manajemen Kalender Akademik{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+    <!-- Add Event Section -->
+    <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+        <h3 class="text-base font-bold text-gray-800 mb-4 flex items-center space-x-2">
+            <i data-lucide="calendar-plus" class="w-5 h-5 text-primary"></i>
+            <span>Tambah Jadwal / Event Akademik</span>
+        </h3>
+
+        <form action="/admin/calendar/save" method="post" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="md:col-span-2">
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Nama Kegiatan</label>
+                <input type="text" name="title" required placeholder="Contoh: Pengisian KRS Semester Genap" class="w-full text-sm border border-gray-200 rounded-lg p-2.5 focus:ring-primary focus:border-primary">
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Tanggal Mulai</label>
+                <input type="date" name="start_date" required class="w-full text-sm border border-gray-200 rounded-lg p-2.5 focus:ring-primary focus:border-primary">
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Tanggal Selesai (Opsional)</label>
+                <input type="date" name="end_date" class="w-full text-sm border border-gray-200 rounded-lg p-2.5 focus:ring-primary focus:border-primary">
+            </div>
+
+            <div class="md:col-span-3">
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Keterangan Tambahan</label>
+                <input type="text" name="description" placeholder="Informasi singkat atau tautan terkait" class="w-full text-sm border border-gray-200 rounded-lg p-2.5 focus:ring-primary focus:border-primary">
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Kategori</label>
+                <select name="category" class="w-full text-sm border border-gray-200 rounded-lg p-2.5 focus:ring-primary focus:border-primary">
+                    <option value="akademik">Akademik (KRS/UTS/UAS)</option>
+                    <option value="kemahasiswaan">Kemahasiswaan (MBKM/Magang)</option>
+                    <option value="wisuda">Yudisium & Wisuda</option>
+                    <option value="pembayaran">UKT & Registrasi</option>
+                </select>
+            </div>
+
+            <div class="md:col-span-4 flex justify-end pt-2">
+                <button type="submit" class="bg-primary hover:bg-secondary text-white font-semibold text-sm px-6 py-2.5 rounded-lg transition shadow flex items-center space-x-2">
+                    <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                    <span>Tambahkan ke Kalender</span>
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Calendar Events Table -->
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+            <h4 class="font-bold text-gray-800">Daftar Jadwal Akademik ({{ events|length }})</h4>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm text-gray-600">
+                <thead class="bg-gray-50 text-xs uppercase font-semibold text-gray-500">
+                    <tr>
+                        <th class="px-6 py-3">Kegiatan</th>
+                        <th class="px-6 py-3">Tanggal Mulai</th>
+                        <th class="px-6 py-3">Tanggal Selesai</th>
+                        <th class="px-6 py-3">Kategori</th>
+                        <th class="px-6 py-3">Keterangan</th>
+                        <th class="px-6 py-3">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for ev in events %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 font-semibold text-gray-900">{{ ev.title }}</td>
+                        <td class="px-6 py-4 font-mono text-xs">{{ ev.start_date }}</td>
+                        <td class="px-6 py-4 font-mono text-xs">{{ ev.end_date or '-' }}</td>
+                        <td class="px-6 py-4 capitalize">
+                            <span class="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full font-medium">{{ ev.category }}</span>
+                        </td>
+                        <td class="px-6 py-4 text-xs text-gray-500">{{ ev.description or '-' }}</td>
+                        <td class="px-6 py-4">
+                            <form action="/admin/calendar/{{ ev.id }}/delete" method="post" onsubmit="return confirm('Hapus jadwal ini?');">
+                                <button type="submit" class="text-xs bg-red-50 hover:bg-red-100 text-red-600 px-2.5 py-1.5 rounded font-medium transition">
+                                    Hapus
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="px-6 py-8 text-center text-gray-400">
+                            Belum ada jadwal akademik.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

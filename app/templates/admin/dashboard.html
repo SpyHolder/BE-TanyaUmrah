@@ -1,0 +1,118 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Dashboard — tanyaUMRAH{% endblock %}
+{% block header_title %}Ringkasan Sistem{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+    <!-- Stat Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center space-x-4">
+            <div class="w-12 h-12 rounded-lg bg-blue-50 text-primary flex items-center justify-center">
+                <i data-lucide="file-text" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500 font-medium">Dokumen Knowledge</p>
+                <h3 class="text-2xl font-bold text-gray-800">{{ stats.total_documents }}</h3>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center space-x-4">
+            <div class="w-12 h-12 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <i data-lucide="database" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500 font-medium">Chunk Vektor (Chroma)</p>
+                <h3 class="text-2xl font-bold text-gray-800">{{ stats.total_chunks }}</h3>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center space-x-4">
+            <div class="w-12 h-12 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                <i data-lucide="users" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500 font-medium">Mahasiswa Terdaftar</p>
+                <h3 class="text-2xl font-bold text-gray-800">{{ stats.total_students }}</h3>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center space-x-4">
+            <div class="w-12 h-12 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                <i data-lucide="thumbs-up" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500 font-medium">Umpan Balik Positif</p>
+                <h3 class="text-2xl font-bold text-gray-800">{{ stats.positive_feedback }}%</h3>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Ingestion Panel -->
+    <div class="bg-gradient-to-r from-blue-900 to-primary text-white p-6 rounded-2xl shadow-md flex items-center justify-between">
+        <div>
+            <h3 class="text-lg font-bold mb-1">Mulai Ingestion Dokumen Resmi UMRAH</h3>
+            <p class="text-blue-100 text-sm max-w-xl">
+                Tersedia 5 dokumen PDF resmi di folder data. Jalankan sinkronisasi awal untuk memproses dokumen menjadi embedding vektor di ChromaDB.
+            </p>
+        </div>
+        <a href="/admin/documents" class="bg-white text-primary hover:bg-blue-50 font-semibold px-5 py-2.5 rounded-xl text-sm transition shadow">
+            Kelola Dokumen &rarr;
+        </a>
+    </div>
+
+    <!-- Recent Documents Table -->
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+            <h4 class="font-bold text-gray-800">Dokumen Terbaru di Knowledge Base</h4>
+            <a href="/admin/documents" class="text-sm text-primary hover:underline font-medium">Lihat Semua</a>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm text-gray-600">
+                <thead class="bg-gray-50 text-xs uppercase font-semibold text-gray-500">
+                    <tr>
+                        <th class="px-6 py-3">Nama Dokumen</th>
+                        <th class="px-6 py-3">Kategori</th>
+                        <th class="px-6 py-3">Halaman</th>
+                        <th class="px-6 py-3">Chunk Vektor</th>
+                        <th class="px-6 py-3">Tipe</th>
+                        <th class="px-6 py-3">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for doc in recent_docs %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 font-medium text-gray-900">{{ doc.nama }}</td>
+                        <td class="px-6 py-4 capitalize">{{ doc.kategori }}</td>
+                        <td class="px-6 py-4">{{ doc.jumlah_halaman }} hal</td>
+                        <td class="px-6 py-4 font-semibold text-primary">{{ doc.jumlah_chunk }}</td>
+                        <td class="px-6 py-4">
+                            {% if doc.tipe_pdf == 'scan' %}
+                            <span class="px-2 py-1 bg-amber-100 text-amber-800 text-xs rounded-full font-medium">Scan (OCR)</span>
+                            {% else %}
+                            <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full font-medium">Teks Digital</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4">
+                            {% if doc.status_ingest == 'done' %}
+                            <span class="px-2 py-1 bg-emerald-100 text-emerald-800 text-xs rounded-full font-medium">Terindeks</span>
+                            {% elif doc.status_ingest == 'processing' %}
+                            <span class="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full font-medium animate-pulse">Memproses</span>
+                            {% else %}
+                            <span class="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full font-medium">Gagal</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="px-6 py-8 text-center text-gray-400">
+                            Belum ada dokumen yang diindeks. Buka halaman Dokumen untuk memulai ingestion.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
