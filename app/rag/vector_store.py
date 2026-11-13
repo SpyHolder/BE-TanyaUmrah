@@ -87,6 +87,20 @@ class VectorStore:
         )
         logger.info(f"Deleted chunks for document_id={document_id} from ChromaDB.")
 
+    def reset_collection(self):
+        """
+        Deletes and recreates the collection with fresh embedding configuration.
+        """
+        try:
+            self.client.delete_collection(self.collection_name)
+        except Exception:
+            pass
+        self.collection = self.client.get_or_create_collection(
+            name=self.collection_name,
+            metadata={"hnsw:space": "cosine"}
+        )
+        logger.info(f"Reset ChromaDB collection '{self.collection_name}'.")
+
     def count_chunks(self) -> int:
         return self.collection.count()
 

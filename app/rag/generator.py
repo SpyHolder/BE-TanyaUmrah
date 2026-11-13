@@ -19,18 +19,16 @@ class ResponseGenerator:
     def __init__(self):
         self.api_key = settings.GEMINI_API_KEY
         self.model_name = settings.GEMINI_MODEL
-        self._model = None
+        self.fallback_model = settings.FALLBACK_MODEL
+        self._client = None
         
         if self.api_key:
             try:
-                import google.generativeai as genai
-                genai.configure(api_key=self.api_key)
-                self._model = genai.GenerativeModel(
-                    model_name=self.model_name,
-                    system_instruction=SYSTEM_PROMPT
-                )
+                from google import genai
+                self._client = genai.Client(api_key=self.api_key)
+                logger.info(f"ResponseGenerator: Initialized with Google GenAI ({self.model_name})")
             except Exception as e:
-                logger.warning(f"Failed to initialize Gemini GenerativeModel: {e}")
+                logger.warning(f"Failed to initialize Google GenAI Client: {e}")
 
     def build_prompt(
         self,
@@ -86,31 +84,52 @@ class ResponseGenerator:
         """
         Yields tokens for SSE streaming.
         """
-        if not self.api_key or not self._model:
-            # Fallback mockup response for offline testing without API key
+        if not self.api_key or not self._client:
             fallback_text = (
-                "Ini adalah mode respon uji coba lokal (API Key Gemini belum diatur).\n\n"
-                "Sistem RAG berhasil mengaitkan dokumen resmi UMRAH dengan pertanyaan Anda. "
-                "Untuk mengaktifkan jawaban AI lengkap, silakan atur GEMINI_API_KEY di file .env backend."
+                "Ini adalah mode respon uji coba lokal.\n\n"
+                "Sistem RAG berhasil mengaitkan dokumen resmi UMRAH dengan pertanyaan Anda."
             )
             for word in fallback_text.split(" "):
                 yield word + " "
             return
 
+        from google.genai import types
+        config = types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            temperature=0.3
+        )
+
+        # Attempt primary model, fallback to secondary if busy
+        selected_model = self.model_name
         try:
-            response = self._model.generate_content(prompt, stream=True)
+            response = self._client.models.generate_content_stream(
+                model=selected_model,
+                contents=prompt,
+                config=config
+            )
             for chunk in response:
                 if chunk.text:
                     yield chunk.text
         except Exception as e:
-            logger.error(f"Error during Gemini generation: {e}")
-            yield f"\n[Terjadi kesalahan saat memproses jawaban: {str(e)}]"
+            logger.warning(f"Model {selected_model} error ({e}), attempting fallback {self.fallback_model}...")
+            try:
+                response = self._client.models.generate_content_stream(
+                    model=self.fallback_model,
+                    contents=prompt,
+                    config=config
+                )
+                for chunk in response:
+                    if chunk.text:
+                        yield chunk.text
+            except Exception as e2:
+                logger.error(f"Error during fallback generation: {e2}")
+                yield f"\n[Terjadi kendala saat memproses jawaban AI: {str(e2)}]"
 
     def generate_suggestions(self, query: str, answer_snippet: str) -> List[str]:
         """
         Generate 2-3 relevant follow-up questions.
         """
-        if not self.api_key or not self._model:
+        if not self.api_key or not self._client:
             return [
                 "Bagaimana prosedur pendaftaran KRS?",
                 "Berapa batas SKS yang boleh diambil?",
@@ -123,7 +142,10 @@ class ResponseGenerator:
                 "berikan 3 pertanyaan lanjutan yang relevan dan singkat (maksimal 8 kata per pertanyaan). "
                 "Output HANYA dalam format JSON array of strings, contoh: [\"Pertanyaan 1?\", \"Pertanyaan 2?\"]"
             )
-            res = self._model.generate_content(suggestion_prompt)
+            res = self._client.models.generate_content(
+                model=self.fallback_model,
+                contents=suggestion_prompt
+            )
             clean_res = res.text.strip()
             if "```json" in clean_res:
                 clean_res = clean_res.split("```json")[1].split("```")[0].strip()
@@ -139,3 +161,4 @@ class ResponseGenerator:
             ]
 
 response_generator = ResponseGenerator()
+

@@ -9,8 +9,9 @@ class Settings(BaseSettings):
     
     # Gemini AI
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    GEMINI_MODEL: str = "gemini-2.5-flash"
-    EMBEDDING_MODEL: str = "models/text-embedding-004"
+    GEMINI_MODEL: str = "gemini-3.5-flash-lite"
+    FALLBACK_MODEL: str = "gemini-3.1-flash-lite"
+    EMBEDDING_MODEL: str = "gemini-embedding-001"
     
     # Database & Storage
     DATABASE_URL: str = "sqlite:///./tanyaumrah.db"
