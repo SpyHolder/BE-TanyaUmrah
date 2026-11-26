@@ -2,8 +2,15 @@
 __pycache__/
 *.pyc
 .env
+.env.*
+!.env.example
+credentials/
+*service-account*.json
+*firebase-adminsdk*.json
 chroma_data/
 *.db
 *.sqlite3
 storage/uploads/
+storage/cache_text/
+storage/*.json
 .pytest_cache/

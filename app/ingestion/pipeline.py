@@ -1,14 +1,17 @@
-import os
 import logging
-from typing import Dict, Any, Optional
+import os
+from typing import Any, Dict, Optional
+
 from sqlalchemy.orm import Session
-from app.database.models import Dokumen
-from app.ingestion.parser import pdf_parser
+
+from app.database.models import AcademicEvent, Dokumen
 from app.ingestion.chunker import smart_chunker
+from app.ingestion.parser import pdf_parser
 from app.rag.embeddings import embedding_service
 from app.rag.vector_store import vector_store
 
 logger = logging.getLogger(__name__)
+
 
 class IngestionPipeline:
     def ingest_pdf(
@@ -17,7 +20,7 @@ class IngestionPipeline:
         db: Session,
         nama: Optional[str] = None,
         kategori: str = "akademik",
-        tahun: Optional[int] = None
+        tahun: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Orchestrates full ingestion of a PDF:
@@ -33,14 +36,19 @@ class IngestionPipeline:
         logger.info(f"Starting ingestion pipeline for '{nama}'...")
 
         # 1. Register or get DB record
-        doc_record = Dokumen(
-            nama=nama,
-            filename=filename,
-            kategori=kategori,
-            tahun=tahun,
-            status_ingest="processing"
+        doc_record = (
+            db.query(Dokumen)
+            .filter(Dokumen.filename == filename)
+            .order_by(Dokumen.id.asc())
+            .first()
         )
-        db.add(doc_record)
+        if not doc_record:
+            doc_record = Dokumen(filename=filename)
+            db.add(doc_record)
+        doc_record.nama = nama
+        doc_record.kategori = kategori
+        doc_record.tahun = tahun
+        doc_record.status_ingest = "processing"
         db.commit()
         db.refresh(doc_record)
 
@@ -60,7 +68,11 @@ class IngestionPipeline:
                 logger.warning(f"No textual content extracted from '{filename}'.")
                 doc_record.status_ingest = "error"
                 db.commit()
-                return {"status": "error", "message": "No text extracted", "document_id": doc_record.id}
+                return {
+                    "status": "error",
+                    "message": "No text extracted",
+                    "document_id": doc_record.id,
+                }
 
             # 4. Prepare batch data for ChromaDB
             chunk_ids = []
@@ -71,26 +83,45 @@ class IngestionPipeline:
                 c_id = f"doc_{doc_record.id}_chunk_{c['chunk_index']}"
                 chunk_ids.append(c_id)
                 chunk_texts.append(c["text"])
-                chunk_metas.append({
-                    "document_id": doc_record.id,
-                    "document_name": doc_record.nama,
-                    "filename": doc_record.filename,
-                    "page": c["page"],
-                    "section": c["section"],
-                    "kategori": kategori,
-                    "tahun": tahun or 2026
-                })
+                chunk_metas.append(
+                    {
+                        "document_id": doc_record.id,
+                        "document_name": doc_record.nama,
+                        "filename": doc_record.filename,
+                        "page": c["page"],
+                        "section": c["section"],
+                        "kategori": kategori,
+                        "tahun": tahun or 2026,
+                    }
+                )
 
             # 5. Generate Embeddings (batch)
             logger.info(f"Generating embeddings for {len(chunk_texts)} chunks...")
             embeddings = embedding_service.embed_texts(chunk_texts)
 
+            if len(embeddings) != len(chunk_texts):
+                raise RuntimeError("Embedding count does not match chunk count")
+
+            # Replacing all chunks also removes stale tails when a PDF becomes shorter.
+            # Prepare embeddings first so provider failures do not destroy the old index.
+            duplicates = (
+                db.query(Dokumen)
+                .filter(Dokumen.filename == filename, Dokumen.id != doc_record.id)
+                .all()
+            )
+            vector_store.delete_by_document_id(doc_record.id)
+            for duplicate in duplicates:
+                vector_store.delete_by_document_id(duplicate.id)
+                db.query(AcademicEvent).filter_by(
+                    source_document_id=duplicate.id
+                ).update({"source_document_id": doc_record.id})
+                db.delete(duplicate)
             # 6. Store in ChromaDB
             vector_store.add_chunks(
                 ids=chunk_ids,
                 documents=chunk_texts,
                 embeddings=embeddings,
-                metadatas=chunk_metas
+                metadatas=chunk_metas,
             )
 
             # 7. Update DB record to done
@@ -98,20 +129,24 @@ class IngestionPipeline:
             doc_record.status_ingest = "done"
             db.commit()
 
-            logger.info(f"Ingestion completed for '{nama}'. {len(chunks)} chunks indexed.")
+            logger.info(
+                f"Ingestion completed for '{nama}'. {len(chunks)} chunks indexed."
+            )
             return {
                 "status": "success",
                 "document_id": doc_record.id,
                 "nama": doc_record.nama,
                 "pages": total_pages,
                 "chunks": len(chunks),
-                "tipe": doc_record.tipe_pdf
+                "tipe": doc_record.tipe_pdf,
             }
 
         except Exception as e:
-            logger.error(f"Error ingesting '{nama}': {e}", exc_info=True)
+            logger.error("Document ingestion failed")
+            db.rollback()
             doc_record.status_ingest = "error"
             db.commit()
-            raise e
+            raise
+
 
 ingestion_pipeline = IngestionPipeline()

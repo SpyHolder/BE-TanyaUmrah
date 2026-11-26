@@ -1,66 +1,61 @@
 import re
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
 
 class SmartChunker:
     def __init__(self, chunk_size: int = 800, chunk_overlap: int = 150):
+        if chunk_size <= 0 or not 0 <= chunk_overlap < chunk_size:
+            raise ValueError("Require chunk_size > chunk_overlap >= 0")
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
 
     def chunk_pages(self, pages_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Splits parsed pages into overlapping chunks while tracking page number
-        and active pasal/bab section headers.
-        """
-        all_chunks = []
-        current_section = "Umum"
-        chunk_counter = 0
+        chunks = []
+        section = "Umum"
+        for page in pages_data:
+            text = page["text"].strip()
+            # Split at actual heading lines, not inline references to other pasal.
+            headings = list(
+                re.finditer(
+                    r"(?im)^[ \t]*(?:BAB\s+[IVXLCDM]+\b|Pasal\s+\d+\b)[^\n]*", text
+                )
+            )
+            boundaries = (
+                [0] + [m.start() for m in headings if m.start() > 0] + [len(text)]
+            )
+            for lo, hi in zip(boundaries, boundaries[1:]):
+                block = text[lo:hi].strip()
+                if not block:
+                    continue
+                heading = re.match(
+                    r"(?i)(?:BAB\s+[IVXLCDM]+\b|Pasal\s+\d+\b)[^\n]*", block
+                )
+                if heading:
+                    section = heading.group(0)[:200].strip()
+                start = 0
+                while start < len(block):
+                    end = min(start + self.chunk_size, len(block))
+                    if end < len(block):
+                        # Prefer a paragraph/word boundary without producing tiny chunks.
+                        cut = max(
+                            block.rfind("\n", start, end), block.rfind(" ", start, end)
+                        )
+                        if cut > start + self.chunk_size // 2:
+                            end = cut
+                    content = block[start:end].strip()
+                    if content:
+                        chunks.append(
+                            {
+                                "chunk_index": len(chunks) + 1,
+                                "text": content,
+                                "page": page["page_number"],
+                                "section": section,
+                            }
+                        )
+                    if end == len(block):
+                        break
+                    start = max(start + 1, end - self.chunk_overlap)
+        return chunks
 
-        for page_item in pages_data:
-            page_num = page_item["page_number"]
-            text = page_item["text"]
-
-            if not text.strip():
-                continue
-
-            # Check if there is a new Pasal or BAB mentioned on this page
-            section_matches = re.findall(r'((?:BAB\s+[IVXLCDM]+|Pasal\s+\d+)[^\n\.\:]*)', text, re.IGNORECASE)
-            if section_matches:
-                current_section = section_matches[0].strip()
-
-            # Split text into paragraphs
-            paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
-            if not paragraphs:
-                paragraphs = [text]
-
-            current_chunk = ""
-            for p in paragraphs:
-                # If adding paragraph exceeds chunk_size, store current_chunk and start new with overlap
-                if len(current_chunk) + len(p) > self.chunk_size and len(current_chunk) > 100:
-                    chunk_counter += 1
-                    all_chunks.append({
-                        "chunk_index": chunk_counter,
-                        "text": current_chunk.strip(),
-                        "page": page_num,
-                        "section": current_section
-                    })
-                    # Keep overlap from tail of current chunk
-                    overlap_text = current_chunk[-self.chunk_overlap:] if len(current_chunk) > self.chunk_overlap else ""
-                    current_chunk = overlap_text + "\n" + p
-                else:
-                    if current_chunk:
-                        current_chunk += "\n" + p
-                    else:
-                        current_chunk = p
-
-            if current_chunk.strip():
-                chunk_counter += 1
-                all_chunks.append({
-                    "chunk_index": chunk_counter,
-                    "text": current_chunk.strip(),
-                    "page": page_num,
-                    "section": current_section
-                })
-
-        return all_chunks
 
 smart_chunker = SmartChunker()

@@ -1,3 +1,4 @@
+import asyncio
 import os
 import sys
 
@@ -12,9 +13,9 @@ def test_query(query: str):
     print(f"❓ PERTANYAAN: {query}")
     print("=" * 65)
 
-    # 1. Similarity search
+    # 1. Similarity search (Hybrid: Vector + Local BM25/Synonym Reranking)
     q_vec = embedding_service.embed_query(query)
-    chunks = vector_store.query_similar(q_vec, top_k=3)
+    chunks = vector_store.query_similar(q_vec, top_k=6, query_text=query)
     
     print(f"\n📚 Ditemukan {len(chunks)} Chunk Relevan:")
     for idx, c in enumerate(chunks, 1):
@@ -50,7 +51,7 @@ def test_query(query: str):
     print("-" * 65)
 
     # 3. Suggestions
-    suggestions = response_generator.generate_suggestions(query, resp.text.strip())
+    suggestions = asyncio.run(response_generator.generate_suggestions(query, resp.text.strip()))
     print("\n💡 Saran Pertanyaan Lanjutan:")
     for s in suggestions:
         print(f"  - {s}")
